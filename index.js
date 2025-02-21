@@ -28,12 +28,29 @@ async function run() {
     await client.connect();
     
     const taskCollection = client.db("taskDB").collection("task");
+    const usersCollection = client.db("taskDB").collection("users");
 
     app.get('/task', async(req,res)=>{
         const result =await taskCollection.find().toArray();
         res.send(result);
-    })
+    });
 
+    // users
+    app.get("/users", async (req, res) => {
+      const result = await usersCollection.find().toArray();
+      res.send(result);
+    });
+
+    app.post("/users", async (req, res) => {
+      const user = req.body;
+      const query = { email: user.email };
+      const existingUser = await usersCollection.findOne(query);
+      if (existingUser) {
+        return res.send({ message: "User already exists", insertedId: null });
+      }
+      const result = await usersCollection.insertOne(user);
+      res.send(result);
+    });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
