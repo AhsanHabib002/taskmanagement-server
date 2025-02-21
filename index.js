@@ -11,7 +11,7 @@ app.use(express.json());
 
 // mongodb
 
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.9fdmi.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -26,7 +26,7 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+    // await client.connect();
 
     const taskCollection = client.db("taskDB").collection("task");
     const usersCollection = client.db("taskDB").collection("users");
@@ -54,12 +54,49 @@ async function run() {
         next();
       });
     };
-    
+
     // task API
 
-    app.get("/task", async (req, res) => {
-      const result = await taskCollection.find().toArray();
+    app.get("/task", verifyToken, async (req, res) => {
+      const email = req.decoded.email;
+      const result = await await taskCollection
+        .find({ userEmail: email })
+        .toArray();
       res.send(result);
+    });
+
+    app.post("/task", async (req, res) => {
+      const task = req.body;
+      const result = await taskCollection.insertOne(task);
+      res.send(result);
+    });
+
+    app.put("/task/:id", async (req, res) => {
+      const { id } = req.params;
+      const update = req.body;
+      const result = await taskCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: update }
+      );
+      res.send(result);
+    });
+
+    app.delete("/task/:id", async (req, res) => {
+      try {
+        const { id } = req.params;
+        
+        const result = await taskCollection.deleteOne({
+          _id: new ObjectId(id),
+        });
+
+        if (result.deletedCount === 1) {
+          res.send({ success: true, message: "Task deleted successfully" });
+        } else {
+          res.status(404).send({ success: false, message: "Task not found" });
+        }
+      } catch (error) {
+        res.status(500).send({ success: false, message: "Server error" });
+      }
     });
 
     // users API
@@ -79,11 +116,18 @@ async function run() {
       res.send(result);
     });
 
+    // stream
+    const taskChangeStream = taskCollection.watch();
+
+    taskChangeStream.on("change", (change) => {
+      console.log("Task Collection Changed:", change);
+    });
+
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
+    // await client.db("admin").command({ ping: 1 });
+    // console.log(
+    //   "Pinged your deployment. You successfully connected to MongoDB!"
+    // );
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
